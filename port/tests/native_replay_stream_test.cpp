@@ -69,5 +69,31 @@ int main(int argc, char** argv) {
     CHECK(sent == std::vector<uint8_t>(file.begin() + 15, file.begin() + 15 + raw_size));
     CHECK(calls == 1 + 1 + 2 + 4);   // table, Game Start, two split parts, four events
   }
+  {
+    // A rewind must discard the rejected branch AND its character-usage metadata.
+    // This is an event-stream fixture, not a playable game or a gameplay test.
+    slippi::NativeReplayStream branched, selected;
+    CHECK(branched.begin_slippi(start, {}, 1700000000));
+    CHECK(selected.begin_slippi(start, {}, 1700000000));
+    const auto checkpoint = branched.mark();
+    const uint8_t branch_end[6] = {2,255,255,255,255,255};
+    std::vector<uint8_t> rejected(84, 0), chosen(84, 0);
+    rejected[3] = chosen[3] = 1;
+    rejected[6] = 9; chosen[6] = 2; // different character IDs in post-frame events
+    CHECK(branched.append(0x38, rejected.data(), rejected.size()));
+    CHECK(branched.append(0x39, branch_end, sizeof branch_end));
+    branched.rewind(checkpoint);
+    CHECK(!branched.ended() && branched.last_frame() == checkpoint.last_frame);
+    CHECK(branched.append(0x38, chosen.data(), chosen.size()));
+    CHECK(selected.append(0x38, chosen.data(), chosen.size()));
+    CHECK(branched.append(0x39, branch_end, sizeof branch_end));
+    CHECK(selected.append(0x39, branch_end, sizeof branch_end));
+    CHECK(branched.encode() == selected.encode());
+    // The retained mark can be used again, as load_keep can for game memory.
+    branched.rewind(checkpoint);
+    CHECK(branched.append(0x38, chosen.data(), chosen.size()));
+    CHECK(branched.append(0x39, branch_end, sizeof branch_end));
+    CHECK(branched.encode() == selected.encode());
+  }
   std::puts("native replay stream tests passed");
 }

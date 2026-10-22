@@ -148,7 +148,11 @@ std::vector<uint8_t> NativeReplayStream::encode() const {
     char stamp[32] = {};
     const std::time_t when = std::time_t(start_time_);
     std::tm tm{};
+#ifdef _WIN32
     gmtime_s(&tm, &when);
+#else
+    gmtime_r(&when, &tm);
+#endif
     std::strftime(stamp, sizeof stamp, "%Y-%m-%dT%H:%M:%SZ", &tm);
     text("metadata"); out.push_back('{');
     text("startAt"); out.push_back('S'); text(stamp);

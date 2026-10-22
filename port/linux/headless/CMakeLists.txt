@@ -1,0 +1,56 @@
+# Asset-independent host/test build. The game library remains a separate build;
+# this target uses the existing Linux services without USB, SDL or graphics.
+cmake_minimum_required(VERSION 3.25)
+project(MeleeHeadless LANGUAGES CXX)
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8
+   OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+  message(FATAL_ERROR "MeleeHeadless requires Linux x86-64")
+endif()
+enable_testing()
+find_package(Threads REQUIRED)
+get_filename_component(REPO "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
+set(PORT "${REPO}/port")
+file(STRINGS "${REPO}/VERSION" MU_VERSION LIMIT_COUNT 1)
+set(MELEE_CPU_BASELINE "AVX2" CACHE STRING "Baseline of the separately built game library")
+set_property(CACHE MELEE_CPU_BASELINE PROPERTY STRINGS AVX2 AVX SSE2)
+if(NOT MELEE_CPU_BASELINE MATCHES "^(AVX2|AVX|SSE2)$")
+  message(FATAL_ERROR "Unknown MELEE_CPU_BASELINE")
+endif()
+add_library(headless_services STATIC ../host_services.cpp ../input_script.cpp
+  "${PORT}/runtime/hle/ax_ucode.cpp")
+target_compile_features(headless_services PUBLIC cxx_std_17)
+target_include_directories(headless_services PUBLIC .. "${PORT}/runtime/abi"
+  "${PORT}/runtime/hle" "${PORT}/runtime/host")
+target_compile_options(headless_services PRIVATE -Wall -Wextra -fno-strict-aliasing -ffp-contract=on)
+target_link_libraries(headless_services PUBLIC Threads::Threads ${CMAKE_DL_LIBS} m)
+add_executable(melee_headless ../main.cpp)
+target_compile_definitions(melee_headless PRIVATE MELEE_PORT_VERSION="${MU_VERSION}"
+  MELEE_LINUX_CPU_BASELINE="${MELEE_CPU_BASELINE}")
+target_link_libraries(melee_headless PRIVATE headless_services)
+set_target_properties(melee_headless PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_link_options(melee_headless PRIVATE -pie)
+add_custom_command(TARGET melee_headless POST_BUILD
+  COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:melee_headless>/Sys/GC"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PORT}/slippi_sys/GC/dsp_coef.bin"
+    "$<TARGET_FILE_DIR:melee_headless>/Sys/GC/dsp_coef.bin" VERBATIM)
+add_test(NAME headless_version COMMAND melee_headless --version)
+add_test(NAME headless_memory COMMAND melee_headless --memory-self-test)
+add_test(NAME headless_services COMMAND melee_headless --host-self-test "${CMAKE_CURRENT_BINARY_DIR}/services")
+add_executable(headless_input_test ../tests/input_script_test.cpp ../input_script.cpp)
+target_include_directories(headless_input_test PRIVATE .. "${PORT}/runtime/abi")
+target_compile_features(headless_input_test PRIVATE cxx_std_17)
+add_test(NAME headless_input COMMAND headless_input_test "${PORT}/scripts/native_vs.txt" "${CMAKE_CURRENT_BINARY_DIR}/input")
+
+function(portable_test name)
+  add_executable(${name} ${ARGN})
+  target_compile_features(${name} PRIVATE cxx_std_17)
+  target_include_directories(${name} PRIVATE "${PORT}/runtime/hle" "${PORT}/runtime/abi" "${REPO}/native")
+  target_link_libraries(${name} PRIVATE Threads::Threads)
+  add_test(NAME ${name} COMMAND ${name})
+endfunction()
+portable_test(native_savestate_test "${PORT}/tests/native_savestate_test.cpp" "${PORT}/runtime/hle/native_savestate.cpp")
+portable_test(native_replay_stream_test "${PORT}/tests/native_replay_stream_test.cpp" "${PORT}/runtime/hle/native_replay_stream.cpp")
+portable_test(native_state_layout_test "${PORT}/tests/native_state_layout_test.cpp")
+portable_test(native_practice_model_test "${REPO}/tests/native_practice_model_test.cpp" "${PORT}/runtime/hle/native_practice_model.cpp")
+portable_test(native_animation_test "${REPO}/tests/native_animation_test.cpp")
+set_tests_properties(headless_memory headless_services PROPERTIES RUN_SERIAL TRUE)
