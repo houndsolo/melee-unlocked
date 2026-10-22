@@ -22,6 +22,7 @@ struct Config {
   std::string card_dir;
   std::string input_script;
   uint32_t max_frames = 0;
+  bool volatile_card = false; // Empty in-memory card; checkpoint branches never touch disk.
   bool pace = true;
   bool headless = false;
   bool no_gc_adapter = false;

@@ -43,11 +43,15 @@ int main() {
     require(control.boundary(menu, c) && !control.ready());
     auto state = match();
     auto worker = std::async(std::launch::async, [&] { return control.boundary(state, c); });
-    require(read_line(fd[0]) == "MUCONTROL 1");
+    require(read_line(fd[0]) == "MUCONTROL 2");
     const auto initial = read_line(fd[0]);
     require(initial.find("3212836864") != std::string::npos);
     require(worker.wait_for(20ms) == std::future_status::timeout);
     send_line(fd[0], "observe\n"); require(read_line(fd[0]) == initial);
+    send_line(fd[0], "capture\n");
+    require(read_line(fd[0]).rfind("UNSUPPORTED checkpoint requires exactly one native thread",0)==0);
+    send_line(fd[0], "restore\n");
+    require(read_line(fd[0])=="UNSUPPORTED no process checkpoint");
     require(worker.wait_for(20ms) == std::future_status::timeout);
     require(c.retraces == 1 && c.ticks == 1234); // callback never mutates host clocks
     send_line(fd[0], "step 256 -128 127 -1 1 255 0 128 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1 0 0 0 0 0 0 0 0 0 -1\n");
@@ -61,7 +65,7 @@ int main() {
 
     // Invalid input must abort without partially applying any port's input.
     for (const auto& command : {std::string("step 999999\n"), std::string("step\n"),
-                               std::string("capture\n"), std::string(4097, 'x') + "\n", std::string("step 0")}) {
+                               std::string("record\n"), std::string(4097, 'x') + "\n", std::string("step 0")}) {
       int pair[2]; require(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
       RetraceControl bad(pair[1], 1);
       auto task = std::async(std::launch::async, [&] {

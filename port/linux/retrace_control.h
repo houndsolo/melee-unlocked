@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "host_services.h"
+#include "process_checkpoint.h"
+#include <functional>
 #include <array>
 #include <ostream>
 
@@ -12,7 +14,7 @@ void write_observation(std::ostream&, const MuStatePod&, const Counters&);
 
 class RetraceControl {
  public:
-  RetraceControl(int socket_fd, uint32_t boot_limit);
+  RetraceControl(int socket_fd, uint32_t boot_limit, std::function<void()> flush = {});
   ~RetraceControl();
   RetraceControl(const RetraceControl&) = delete;
   RetraceControl& operator=(const RetraceControl&) = delete;
@@ -24,6 +26,8 @@ class RetraceControl {
  private:
   void send(const std::string&);
   bool receive(std::string&);
+  ProcessCheckpoint checkpoint_;
+  std::function<void()> flush_;
   int fd_;
   uint32_t boot_limit_;
   bool ready_ = false;

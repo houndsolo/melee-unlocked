@@ -226,6 +226,7 @@ int main(int argc, char** argv) {
 #endif
     if (control_fd >= 0 && (!config.headless || config.pace || config.max_frames || !config.has_match))
       throw std::runtime_error("control requires --headless --fast --match, without --frames");
+    config.volatile_card = control_fd >= 0;
     std::string error;
     if (!linux_host::initialize(config, &error)) throw std::runtime_error(error);
 #ifdef MELEE_LINUX_GRAPHICS
@@ -241,7 +242,12 @@ int main(int argc, char** argv) {
       if (!observer.digest) throw std::runtime_error("cannot open state digest output");
     }
     if (control_fd >= 0)
-      observer.control = std::make_unique<linux_host::RetraceControl>(control_fd, boot_limit);
+      observer.control = std::make_unique<linux_host::RetraceControl>(control_fd, boot_limit, [&] {
+        if (observer.digest.is_open()) {
+          observer.digest.flush();
+          if (!observer.digest) throw std::runtime_error("cannot flush checkpoint trace");
+        }
+      });
     if (observer.control || observer.digest.is_open()) linux_host::set_frame_observer(observe, &observer);
     const int result = linux_host::run();
 #ifdef MELEE_LINUX_GRAPHICS

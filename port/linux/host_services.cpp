@@ -5,6 +5,7 @@
 #endif
 #include "host_services.h"
 #include "input_script.h"
+#include "process_checkpoint.h"
 #include "ax_ucode.h"
 #include "disc_archive.h"
 #ifdef MELEE_LINUX_GRAPHICS
@@ -523,6 +524,7 @@ std::string filename(const SavedFile& file) {
   return name+suffix;
 }
 bool persist(SavedFile& file) {
+  if (cfg.volatile_card) return true;
   const auto target=file.path.empty() ? directory/filename(file) : file.path;
   std::string temporary=(target.string()+".tmp-XXXXXX");
   std::vector<char> path(temporary.begin(), temporary.end()); path.push_back(0);
@@ -552,6 +554,7 @@ bool persist(SavedFile& file) {
 int32_t mount(int32_t chan) {
   if (chan!=0) return no_card;
   if (mounted) return ready;
+  if (cfg.volatile_card) { mounted=true; return ready; }
   if (!cfg.card_dir.empty()) directory=cfg.card_dir;
   else {
     const char* xdg=std::getenv("XDG_DATA_HOME");
@@ -630,7 +633,7 @@ int32_t h_card_probe(int32_t chan, int32_t* size, int32_t* sector) {
   return card::ready;
 }
 int32_t h_card_mount(int32_t chan) { return card::mount(chan); }
-int32_t h_card_unmount(int32_t chan) { if (chan!=0) return card::no_card; card::reset(); return card::ready; }
+int32_t h_card_unmount(int32_t chan) { if (chan!=0) return card::no_card; if (cfg.volatile_card) card::mounted=false; else card::reset(); return card::ready; }
 int32_t h_card_open(int32_t chan, const char* name, int32_t* file, uint32_t* length) {
   if (chan!=0 || !card::mounted) return card::no_card;
   const int32_t index=card::find(name);
@@ -668,7 +671,7 @@ int32_t h_card_delete(int32_t chan, const char* name) {
   const int32_t index=card::find(name);
   if (index<0) return card::no_file;
   auto& file=card::saved[size_t(index)];
-  if (unlink(file->path.c_str())!=0 && errno!=ENOENT) return card::fatal;
+  if (!cfg.volatile_card && unlink(file->path.c_str())!=0 && errno!=ENOENT) return card::fatal;
   file.reset(); return card::ready;
 }
 int32_t h_card_rename(int32_t chan, const char* old_name, const char* new_name) {
@@ -684,7 +687,7 @@ int32_t h_card_rename(int32_t chan, const char* old_name, const char* new_name) 
   std::memcpy(replacement.header.data()+8,new_name,length);
   replacement.path.clear();
   if (!card::persist(replacement)) return card::fatal;
-  if (unlink(file.path.c_str())!=0 && errno!=ENOENT) { unlink(replacement.path.c_str()); return card::fatal; }
+  if (!cfg.volatile_card && unlink(file.path.c_str())!=0 && errno!=ENOENT) { unlink(replacement.path.c_str()); return card::fatal; }
   file=std::move(replacement);
   return card::ready;
 }
@@ -733,7 +736,7 @@ int32_t h_card_format(int32_t chan) {
   const int32_t result=card::mount(chan);
   if (result!=card::ready) return result;
   for (auto& file : card::saved) if (file) {
-    if (unlink(file->path.c_str())!=0 && errno!=ENOENT) return card::fatal;
+    if (!cfg.volatile_card && unlink(file->path.c_str())!=0 && errno!=ENOENT) return card::fatal;
     file.reset();
   }
   return card::ready;
@@ -1123,6 +1126,34 @@ bool service_self_test(const char* scratch_directory, std::string* error) {
     expect(api.card_read(0,original,actual.data(),UINT32_MAX,0)==-11 || api.card_read(0,original,actual.data(),UINT32_MAX,0)==-4,"invalid read rejection");
     expect(api.card_format(0)==0,"format private test card");
     expect(api.card_unmount(0)==0 && api.card_mount(0)==0 && api.card_free_blocks(0,&bytes_free,&files_free)==0 && files_free==127,"format persisted");
+    // Process checkpoints retain stack, host heap, clocks and callbacks as well
+    // as fixed game RAM. This fixture uses actual host services, not gameplay.
+    card::reset(); cfg.volatile_card=true; cfg.card_dir=(test_dir/"never-created").string();
+    expect(api.card_mount(0)==0 && api.card_create(0,"MEMORY",0x2000,&file)==0,"volatile card create");
+    uint8_t saved_byte=7, read_byte=0;
+    expect(api.card_write(0,file,&saved_byte,1,0)==0,"volatile write");
+    expect(api.card_rename(0,"MEMORY","KEPT")==0,"volatile rename");
+    expect(api.card_unmount(0)==0 && api.card_mount(0)==0 && api.card_open(0,"KEPT",&file,&length)==0,"volatile remount retains saves");
+    auto* ram=memory_pointer(0x80000000u,4);
+    ram[0]=23; aram[0]=24; count.ticks=25; next_retrace=26;
+    audio.next=27; audio.buffer=ram; scripted_pads[0].button=28;
+    int completed=0;
+    completions.push_back({[](int32_t result,void* user) { *static_cast<int*>(user)=result; },29,&completed});
+    ProcessCheckpoint checkpoint;
+    const auto generation=checkpoint.capture();
+    expect(ram[0]==23 && aram[0]==24 && count.ticks==25 && next_retrace==26,"restored RAM/ARAM/clocks");
+    expect(audio.next==27 && audio.buffer==ram && scripted_pads[0].button==28,"restored audio/input state");
+    expect(completed==0 && completions.size()==1,"restored native stack and pending callback");
+    expect(api.card_read(0,file,&read_byte,1,0)==0 && read_byte==7,"restored volatile card");
+    deliver_completions(); expect(completed==29,"restored callback reaches its stack argument");
+    if (generation<2) {
+      ram[0]=0; aram[0]=0; count.ticks=0; next_retrace=0;
+      audio.next=0; audio.buffer=nullptr; scripted_pads[0].button=0;
+      saved_byte=99; expect(api.card_write(0,file,&saved_byte,1,0)==0,"branch card write");
+      checkpoint.restore();
+    }
+    expect(api.card_delete(0,"KEPT")==0 && api.card_format(0)==0,"volatile delete/format");
+    expect(!std::filesystem::exists(cfg.card_dir),"volatile card never touches disk");
     success=true;
   } catch(const std::exception& exception) { fail(error,exception.what()); }
   catch(...) { fail(error,"unexpected native host failure during self-test"); }
@@ -1130,7 +1161,7 @@ bool service_self_test(const char* scratch_directory, std::string* error) {
   // Delete only the private directory created by mkdtemp above. Existing files
   // in the requested scratch root never participate in the acceptance test.
   std::filesystem::remove_all(test_dir,ec);
-  if (success) log("native host services: fixed memory, clock, ARAM, SHA-1 and persistent GCI checks passed");
+  if (success) log("native host services: fixed memory, clock, ARAM, SHA-1 persistent/volatile GCI and repeated process checkpoint checks passed");
   return success;
 }
 } // namespace linux_host

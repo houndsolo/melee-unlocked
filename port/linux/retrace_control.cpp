@@ -43,7 +43,8 @@ void write_observation(std::ostream& out, const MuStatePod& state, const Counter
         << f.vel_x << ',' << f.vel_y << ',' << f.vel_z << ',' << f.percent << ',' << f.facing;
   out << '\n';
 }
-RetraceControl::RetraceControl(int fd, uint32_t limit) : fd_(fd), boot_limit_(limit) {
+RetraceControl::RetraceControl(int fd, uint32_t limit, std::function<void()> flush)
+    : flush_(std::move(flush)), fd_(fd), boot_limit_(limit) {
   if (fd < 3 || !limit) throw std::runtime_error("control: invalid socket or boot limit");
 }
 RetraceControl::~RetraceControl() { close(fd_); }
@@ -78,7 +79,7 @@ bool RetraceControl::boundary(const MuStatePod& state, const Counters& c) {
       return true;
     }
     ready_ = true;
-    send("MUCONTROL 1\n");
+    send("MUCONTROL 2\n");
   }
   std::ostringstream out;
   out << "STATE ";
@@ -88,6 +89,26 @@ bool RetraceControl::boundary(const MuStatePod& state, const Counters& c) {
   while (receive(line)) {
     if (line == "quit") return false;
     if (line == "observe") { send(out.str()); continue; }
+    if (line == "capture") {
+      if (state.scene_major != 2 || state.scene != 2 || !state.match_frame ||
+          !state.player[0].present || !state.player[1].present) {
+        send("UNSUPPORTED checkpoint requires a live two-player VS match\n"); continue;
+      }
+      try {
+        if (flush_) flush_();
+        const auto generation = checkpoint_.capture();
+        send(generation ? "RESTORED\n" : "CAPTURED\n");
+        send(out.str());
+      } catch (const std::exception& error) {
+        send(std::string("UNSUPPORTED ") + error.what() + "\n");
+      }
+      continue;
+    }
+    if (line == "restore") {
+      if (!checkpoint_.active()) { send("UNSUPPORTED no process checkpoint\n"); continue; }
+      if (flush_) flush_();
+      checkpoint_.restore();
+    }
     std::istringstream in(line);
     std::string command;
     in >> command;

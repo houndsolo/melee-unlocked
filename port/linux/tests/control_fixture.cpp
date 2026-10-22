@@ -2,13 +2,18 @@
 #include "retrace_control.h"
 #include <cstdlib>
 #include <iostream>
+#include <fstream>
 #include <string>
 int main(int argc, char** argv) {
   int fd = -1;
-  for (int i = 1; i + 1 < argc; ++i)
+  std::string digest_path;
+  for (int i = 1; i + 1 < argc; ++i) {
     if (std::string(argv[i]) == "--control-fd") fd = std::stoi(argv[++i]);
+    else if (std::string(argv[i]) == "--state-digest") digest_path = argv[++i];
+  }
   try {
-    linux_host::RetraceControl control(fd, 10);
+    std::ofstream digest(digest_path);
+    linux_host::RetraceControl control(fd, 10, [&] { digest.flush(); });
     linux_host::Counters counters{};
     MuStatePod state{};
     state.scene_major = state.scene = 2;
@@ -17,6 +22,7 @@ int main(int argc, char** argv) {
       ++counters.retraces;
       ++state.match_frame;
       state.player[0].pos_x += control.pads()[0].button;
+      linux_host::write_observation(digest, state, counters);
       if (!control.boundary(state, counters)) break;
     }
     return 0;
