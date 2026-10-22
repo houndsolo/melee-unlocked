@@ -16,7 +16,7 @@ if(NOT MELEE_LINUX_GAME_LIBRARY)
 endif()
 
 file(STRINGS "${PROJECT_SOURCE_DIR}/VERSION" MELEE_LINUX_VERSION LIMIT_COUNT 1)
-add_executable(melee_linux main.cpp host_services.cpp input_script.cpp gc_adapter.cpp "${PROJECT_SOURCE_DIR}/port/runtime/hle/ax_ucode.cpp")
+add_executable(melee_linux main.cpp host_services.cpp input_script.cpp retrace_control.cpp gc_adapter.cpp "${PROJECT_SOURCE_DIR}/port/runtime/hle/ax_ucode.cpp")
 target_compile_features(melee_linux PRIVATE cxx_std_17)
 target_compile_definitions(melee_linux PRIVATE MELEE_PORT_VERSION="${MELEE_LINUX_VERSION}" MELEE_LINUX_USB MELEE_NO_SLIPPI
   MELEE_LINUX_CPU_BASELINE="${MELEE_CPU_BASELINE}")

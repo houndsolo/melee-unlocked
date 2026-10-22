@@ -1,6 +1,8 @@
 // Native Linux entry point for Melee Unlocked's source game.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "host_services.h"
+#include "retrace_control.h"
+#include <memory>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -74,21 +76,26 @@ void usage() {
             "              [--fps 60..1000] [--card-dir path] [--no-gc-adapter]\n"
             "              [--input-script path] [--capture frame.ppm] [--vanilla-game]\n"
             "              [--rng-seed N] [--time-base N] [--trace-state]\n"
+            "              [--match 'stage p1_kind costume cpu level p2_kind costume cpu level']\n"
+            "              [--control-fd N --boot-limit N] (headless/fast; one VI per step)\n"
             "  melee_linux --memory-self-test | --version\n"
             "\nRequires a retail NTSC 1.02 ISO. Default display: 120 FPS; gameplay: 60 Hz.\n"
             "Keyboard: arrows = stick, Z/X/C/V = A/B/X/Y, Enter = Start,\n"
             "          Q/E = L/R, S = Z, I/J/K/L = C-stick.\n");
 }
-void observe(const MuStatePod& state, const linux_host::Counters& counters, void* stream) {
-  auto& out = *static_cast<std::ofstream*>(stream);
-  out << counters.retraces << ',' << state.scene_major << ',' << state.scene << ','
-      << state.match_frame << ',' << state.rng;
-  for (const auto& fighter : state.player)
-    out << ',' << fighter.present << ',' << fighter.stocks << ',' << fighter.action << ','
-        << fighter.anim_frame << ',' << fighter.pos_x << ',' << fighter.pos_y << ','
-        << fighter.pos_z << ',' << fighter.vel_x << ',' << fighter.vel_y << ','
-        << fighter.vel_z << ',' << fighter.percent << ',' << fighter.facing;
-  out << '\n';
+struct Observer {
+  std::ofstream digest;
+  std::unique_ptr<linux_host::RetraceControl> control;
+};
+void observe(const MuStatePod& state, const linux_host::Counters& counters, void* user) {
+  auto& observer = *static_cast<Observer*>(user);
+  if (observer.digest.is_open()) linux_host::write_observation(observer.digest, state, counters);
+  if (observer.control) {
+    if (!observer.control->boundary(state, counters)) linux_host::request_stop();
+    else if (observer.control->ready())
+      for (unsigned port = 0; port < 4; ++port)
+        linux_host::set_pad_override(port, observer.control->pads()[port]);
+  }
 }
 // The Windows build's check (port/app/main.cpp): same wording, same exit code.
 bool cpu_has_baseline() {
@@ -112,6 +119,8 @@ int main(int argc, char** argv) {
     std::string digest_path, graphics_capture, capture_path;
     double display_fps = 120;
     bool presenter_test = false;
+    int control_fd = -1;
+    uint32_t boot_limit = 6000;
     std::error_code path_error;
     const auto binary = std::filesystem::read_symlink("/proc/self/exe", path_error);
     if (!path_error) config.game_path = (binary.parent_path() / "melee_game.so").string();
@@ -160,6 +169,19 @@ int main(int argc, char** argv) {
       else if (arg == "--card-dir") config.card_dir = next();
       else if (arg == "--input-script") config.input_script = next();
       else if (arg == "--state-digest") digest_path = next();
+      else if (arg == "--match") {
+        config.match = linux_host::parse_fixed_match(next()); config.has_match = true;
+      }
+      else if (arg == "--control-fd") {
+        const auto fd = number(next(), "control fd");
+        if (fd < 3 || fd > INT32_MAX) throw std::runtime_error("invalid control fd");
+        control_fd = static_cast<int>(fd);
+      }
+      else if (arg == "--boot-limit") {
+        const auto limit = number(next(), "boot limit");
+        if (!limit || limit > UINT32_MAX) throw std::runtime_error("invalid boot limit");
+        boot_limit = static_cast<uint32_t>(limit);
+      }
       else if (arg == "--frames") {
         const auto frames = number(next(), "frame count");
         if (frames > UINT32_MAX) throw std::runtime_error("frame count exceeds uint32");
@@ -202,6 +224,8 @@ int main(int argc, char** argv) {
 #ifndef MELEE_LINUX_GRAPHICS
     if (!config.headless) throw std::runtime_error("this build has no graphics; rebuild with MELEE_LINUX_GRAPHICS=ON");
 #endif
+    if (control_fd >= 0 && (!config.headless || config.pace || config.max_frames || !config.has_match))
+      throw std::runtime_error("control requires --headless --fast --match, without --frames");
     std::string error;
     if (!linux_host::initialize(config, &error)) throw std::runtime_error(error);
 #ifdef MELEE_LINUX_GRAPHICS
@@ -211,12 +235,14 @@ int main(int argc, char** argv) {
       linux_host::set_video_sinks(fifo, nullptr, nullptr);
     }
 #endif
-    std::ofstream digest;
+    Observer observer;
     if (!digest_path.empty()) {
-      digest.open(digest_path);
-      if (!digest) throw std::runtime_error("cannot open state digest output");
-      linux_host::set_frame_observer(observe, &digest);
+      observer.digest.open(digest_path);
+      if (!observer.digest) throw std::runtime_error("cannot open state digest output");
     }
+    if (control_fd >= 0)
+      observer.control = std::make_unique<linux_host::RetraceControl>(control_fd, boot_limit);
+    if (observer.control || observer.digest.is_open()) linux_host::set_frame_observer(observe, &observer);
     const int result = linux_host::run();
 #ifdef MELEE_LINUX_GRAPHICS
     if (!capture_path.empty() && presentation.backend)

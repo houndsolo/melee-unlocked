@@ -16,7 +16,7 @@ set_property(CACHE MELEE_CPU_BASELINE PROPERTY STRINGS AVX2 AVX SSE2)
 if(NOT MELEE_CPU_BASELINE MATCHES "^(AVX2|AVX|SSE2)$")
   message(FATAL_ERROR "Unknown MELEE_CPU_BASELINE")
 endif()
-add_library(headless_services STATIC ../host_services.cpp ../input_script.cpp
+add_library(headless_services STATIC ../host_services.cpp ../input_script.cpp ../retrace_control.cpp
   "${PORT}/runtime/hle/ax_ucode.cpp")
 target_compile_features(headless_services PUBLIC cxx_std_17)
 target_include_directories(headless_services PUBLIC .. "${PORT}/runtime/abi"
@@ -54,3 +54,14 @@ portable_test(native_state_layout_test "${PORT}/tests/native_state_layout_test.c
 portable_test(native_practice_model_test "${REPO}/tests/native_practice_model_test.cpp" "${PORT}/runtime/hle/native_practice_model.cpp")
 portable_test(native_animation_test "${REPO}/tests/native_animation_test.cpp")
 set_tests_properties(headless_memory headless_services PROPERTIES RUN_SERIAL TRUE)
+
+add_executable(headless_control_test ../tests/retrace_control_test.cpp ../retrace_control.cpp)
+target_include_directories(headless_control_test PRIVATE .. "${PORT}/runtime/abi")
+target_compile_features(headless_control_test PRIVATE cxx_std_17)
+target_link_libraries(headless_control_test PRIVATE Threads::Threads)
+add_test(NAME headless_control COMMAND headless_control_test)
+set_tests_properties(headless_control PROPERTIES TIMEOUT 15)
+# For Python integration tests of the real socket protocol, with synthetic state.
+add_executable(headless_control_fixture ../tests/control_fixture.cpp ../retrace_control.cpp)
+target_include_directories(headless_control_fixture PRIVATE .. "${PORT}/runtime/abi")
+target_compile_features(headless_control_fixture PRIVATE cxx_std_17)
