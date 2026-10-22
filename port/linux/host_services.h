@@ -60,6 +60,8 @@ bool initialize(const Config&, std::string* error = nullptr);
 int run();
 // Explicit snapshot export only; no file/spectator side effects in trial branches.
 std::vector<uint8_t> recorded_replay();
+struct RecordingStatus { int32_t last_frame; bool ended; };
+RecordingStatus recording_status();
 void shutdown();
 
 // A scripted pad replaces the hardware pad until clear_pad_override is called.

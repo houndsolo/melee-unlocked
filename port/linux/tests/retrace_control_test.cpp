@@ -1,6 +1,7 @@
 // Asset-independent protocol test. Synthetic counters are NOT gameplay evidence.
 #include "retrace_control.h"
 #include <future>
+#include <atomic>
 #include <chrono>
 #include <iostream>
 #include <stdexcept>
@@ -37,7 +38,9 @@ int main() {
       require(rejected);
     }
     int fd[2]; require(socketpair(AF_UNIX, SOCK_STREAM, 0, fd) == 0);
-    RetraceControl control(fd[1], 10, {}, [] { return std::vector<uint8_t>(1500, 0xab); });
+    std::atomic<bool> ended{false};
+    RetraceControl control(fd[1], 10, {}, [] { return std::vector<uint8_t>(1500, 0xab); },
+                           [&] { return RecordingStatus{9, ended.load()}; });
     Counters c{}; c.retraces = 1; c.ticks = 1234;
     MuStatePod menu{}; menu.match_frame = 99;
     require(control.boundary(menu, c) && !control.ready());
@@ -48,6 +51,9 @@ int main() {
     require(initial.find("3212836864") != std::string::npos);
     require(worker.wait_for(20ms) == std::future_status::timeout);
     send_line(fd[0], "observe\n"); require(read_line(fd[0]) == initial);
+    send_line(fd[0], "record-status\n"); require(read_line(fd[0]) == "RECORDING 9 0");
+    ended = true;
+    send_line(fd[0], "record-status\n"); require(read_line(fd[0]) == "RECORDING 9 1");
     send_line(fd[0], "record\n");
     require(read_line(fd[0]) == "REPLAY 1500");
     std::string hex;

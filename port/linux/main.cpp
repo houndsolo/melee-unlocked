@@ -248,7 +248,7 @@ int main(int argc, char** argv) {
           observer.digest.flush();
           if (!observer.digest) throw std::runtime_error("cannot flush checkpoint trace");
         }
-      }, linux_host::recorded_replay);
+      }, linux_host::recorded_replay, linux_host::recording_status);
     if (observer.control || observer.digest.is_open()) linux_host::set_frame_observer(observe, &observer);
     const int result = linux_host::run();
 #ifdef MELEE_LINUX_GRAPHICS

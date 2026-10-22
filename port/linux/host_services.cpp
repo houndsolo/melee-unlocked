@@ -838,6 +838,9 @@ MuHostApi make_api() {
   h.display_options=h_zero_u32; h.music_volume=h_music; h.native_draw_identity=h_zero_i32;
   h.mod_flags=h_zero_u32; h.slippi_command=h_slippi; h.resim_phase=h_resim;
   h.replay_event=h_replay_event;
+  // The game calls this after Game End and on match exit. The event sink owns
+  // all recording data; completion never writes a file or invents an ending.
+  h.replay_finished=h_void;
   h.hud_scales=h_hud_scales; h.vi_idle_step=h_vi_idle;
 #ifdef MELEE_LINUX_GRAPHICS
   h.native_pose_capture_enabled=h_pose_enabled;
@@ -1015,6 +1018,12 @@ int run() {
   catch (const std::exception& error) { log("native host failure: %s", error.what()); return 1; }
 }
 
+RecordingStatus recording_status() {
+  if (!cfg.vanilla_game || !recording.active())
+    throw std::runtime_error("no active vanilla recording");
+  return {recording.last_frame(), recording.ended()};
+}
+
 std::vector<uint8_t> recorded_replay() {
   if (!cfg.vanilla_game || !recording.active() || recording.last_frame() < 0)
     throw std::runtime_error("recording requires a vanilla match with gameplay events");
@@ -1089,6 +1098,8 @@ bool service_self_test(const char* scratch_directory, std::string* error) {
     if (!reserve_memory(&reserve_error)) throw std::runtime_error(reserve_error);
     cfg={}; cfg.card_dir=test_dir.string(); count={}; boot_ticks=123ull*MU_TB_HZ;
     api=make_api(); aram.assign(aram_bytes,0);
+    expect(api.replay_event && api.replay_finished,"recording lifecycle callbacks installed");
+    api.replay_finished(); // The real game invokes this after emitting Game End.
     std::memcpy(disc_header.data(),"GALE01",6);
     expect(memory_pointer(0x80000000u,mem1_bytes)==reinterpret_cast<uint8_t*>(mem1_base),"MEM1 direct mapping");
     expect(memory_pointer(0,4)==memory_pointer(0x80000000u,4),"MEM1 physical alias");
