@@ -43,8 +43,9 @@ void write_observation(std::ostream& out, const MuStatePod& state, const Counter
         << f.vel_x << ',' << f.vel_y << ',' << f.vel_z << ',' << f.percent << ',' << f.facing;
   out << '\n';
 }
-RetraceControl::RetraceControl(int fd, uint32_t limit, std::function<void()> flush)
-    : flush_(std::move(flush)), fd_(fd), boot_limit_(limit) {
+RetraceControl::RetraceControl(int fd, uint32_t limit, std::function<void()> flush,
+                               std::function<std::vector<uint8_t>()> replay)
+    : replay_(std::move(replay)), flush_(std::move(flush)), fd_(fd), boot_limit_(limit) {
   if (fd < 3 || !limit) throw std::runtime_error("control: invalid socket or boot limit");
 }
 RetraceControl::~RetraceControl() { close(fd_); }
@@ -89,6 +90,27 @@ bool RetraceControl::boundary(const MuStatePod& state, const Counters& c) {
   while (receive(line)) {
     if (line == "quit") return false;
     if (line == "observe") { send(out.str()); continue; }
+    if (line == "record") {
+      std::vector<uint8_t> bytes;
+      try {
+        if (!replay_) throw std::runtime_error("no replay event sink");
+        bytes = replay_();
+      } catch (const std::exception& error) {
+        send(std::string("UNSUPPORTED ") + error.what() + "\n");
+        continue;
+      }
+      send("REPLAY " + std::to_string(bytes.size()) + "\n");
+      constexpr char hex[] = "0123456789abcdef";
+      for (size_t offset = 0; offset < bytes.size(); offset += 1024) {
+        std::string chunk;
+        for (size_t i = offset; i < bytes.size() && i < offset + 1024; ++i) {
+          chunk += hex[bytes[i] >> 4]; chunk += hex[bytes[i] & 15];
+        }
+        send(chunk + "\n");
+      }
+      send("RECORDED\n");
+      continue;
+    }
     if (line == "capture") {
       if (state.scene_major != 2 || state.scene != 2 || !state.match_frame ||
           !state.player[0].present || !state.player[1].present) {

@@ -14,7 +14,8 @@ void write_observation(std::ostream&, const MuStatePod&, const Counters&);
 
 class RetraceControl {
  public:
-  RetraceControl(int socket_fd, uint32_t boot_limit, std::function<void()> flush = {});
+  RetraceControl(int socket_fd, uint32_t boot_limit, std::function<void()> flush = {},
+                 std::function<std::vector<uint8_t>()> replay = {});
   ~RetraceControl();
   RetraceControl(const RetraceControl&) = delete;
   RetraceControl& operator=(const RetraceControl&) = delete;
@@ -26,6 +27,7 @@ class RetraceControl {
  private:
   void send(const std::string&);
   bool receive(std::string&);
+  std::function<std::vector<uint8_t>()> replay_;
   ProcessCheckpoint checkpoint_;
   std::function<void()> flush_;
   int fd_;

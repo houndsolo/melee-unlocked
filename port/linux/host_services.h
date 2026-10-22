@@ -58,6 +58,8 @@ void set_frame_observer(FrameObserver observer, void* user);
 bool reserve_memory(std::string* error = nullptr);
 bool initialize(const Config&, std::string* error = nullptr);
 int run();
+// Explicit snapshot export only; no file/spectator side effects in trial branches.
+std::vector<uint8_t> recorded_replay();
 void shutdown();
 
 // A scripted pad replaces the hardware pad until clear_pad_override is called.

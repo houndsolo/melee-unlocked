@@ -37,7 +37,7 @@ int main() {
       require(rejected);
     }
     int fd[2]; require(socketpair(AF_UNIX, SOCK_STREAM, 0, fd) == 0);
-    RetraceControl control(fd[1], 10);
+    RetraceControl control(fd[1], 10, {}, [] { return std::vector<uint8_t>(1500, 0xab); });
     Counters c{}; c.retraces = 1; c.ticks = 1234;
     MuStatePod menu{}; menu.match_frame = 99;
     require(control.boundary(menu, c) && !control.ready());
@@ -47,6 +47,14 @@ int main() {
     const auto initial = read_line(fd[0]);
     require(initial.find("3212836864") != std::string::npos);
     require(worker.wait_for(20ms) == std::future_status::timeout);
+    send_line(fd[0], "observe\n"); require(read_line(fd[0]) == initial);
+    send_line(fd[0], "record\n");
+    require(read_line(fd[0]) == "REPLAY 1500");
+    std::string hex;
+    for (int i = 0; i < 1024; ++i) hex += "ab";
+    require(read_line(fd[0]) == hex);
+    require(read_line(fd[0]) == hex.substr(0, 952));
+    require(read_line(fd[0]) == "RECORDED");
     send_line(fd[0], "observe\n"); require(read_line(fd[0]) == initial);
     send_line(fd[0], "capture\n");
     require(read_line(fd[0]).rfind("UNSUPPORTED checkpoint requires exactly one native thread",0)==0);
@@ -65,7 +73,7 @@ int main() {
 
     // Invalid input must abort without partially applying any port's input.
     for (const auto& command : {std::string("step 999999\n"), std::string("step\n"),
-                               std::string("record\n"), std::string(4097, 'x') + "\n", std::string("step 0")}) {
+                               std::string("unknown\n"), std::string(4097, 'x') + "\n", std::string("step 0")}) {
       int pair[2]; require(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
       RetraceControl bad(pair[1], 1);
       auto task = std::async(std::launch::async, [&] {

@@ -227,6 +227,7 @@ int main(int argc, char** argv) {
     if (control_fd >= 0 && (!config.headless || config.pace || config.max_frames || !config.has_match))
       throw std::runtime_error("control requires --headless --fast --match, without --frames");
     config.volatile_card = control_fd >= 0;
+    if (control_fd >= 0 && config.vanilla_game) setenv("MELEE_SOURCE_RECORD", "1", 1);
     std::string error;
     if (!linux_host::initialize(config, &error)) throw std::runtime_error(error);
 #ifdef MELEE_LINUX_GRAPHICS
@@ -247,7 +248,7 @@ int main(int argc, char** argv) {
           observer.digest.flush();
           if (!observer.digest) throw std::runtime_error("cannot flush checkpoint trace");
         }
-      });
+      }, linux_host::recorded_replay);
     if (observer.control || observer.digest.is_open()) linux_host::set_frame_observer(observe, &observer);
     const int result = linux_host::run();
 #ifdef MELEE_LINUX_GRAPHICS

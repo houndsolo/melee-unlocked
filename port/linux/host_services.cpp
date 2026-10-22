@@ -5,6 +5,7 @@
 #endif
 #include "host_services.h"
 #include "input_script.h"
+#include "native_replay_stream.h"
 #include "process_checkpoint.h"
 #include "ax_ucode.h"
 #include "disc_archive.h"
@@ -797,6 +798,18 @@ int32_t h_slippi(uint8_t, const uint8_t*, uint32_t, uint8_t*, uint32_t, uint32_t
 }
 void h_resim(int32_t entering) { resimulating = entering != 0; }
 
+slippi::NativeReplayStream recording;
+void h_replay_event(uint8_t command, const uint8_t* payload, uint32_t size) {
+  if (!cfg.vanilla_game) return; // Non-vanilla code lists/options are not integrated here.
+  if (command == 0x36) {
+    if (recording.active()) throw std::runtime_error("recording: second match requires a new session");
+    if (!recording.begin_slippi(std::vector<uint8_t>(payload, payload + size),
+                               {0xFF, 0, 0, 0, 0, 0, 0, 0}, 946684800 + boot_ticks / 40500000))
+      throw std::runtime_error(recording.error());
+  } else if (recording.active() && !recording.ended() && !recording.append(command, payload, size))
+    throw std::runtime_error(recording.error());
+}
+
 MuHostApi make_api() {
   MuHostApi h{};
   h.version = MU_HOST_API_VERSION;
@@ -824,6 +837,7 @@ MuHostApi make_api() {
   h.game_options=h_options; h.game_options2=h_zero_u32; h.game_options3=h_zero_u32;
   h.display_options=h_zero_u32; h.music_volume=h_music; h.native_draw_identity=h_zero_i32;
   h.mod_flags=h_zero_u32; h.slippi_command=h_slippi; h.resim_phase=h_resim;
+  h.replay_event=h_replay_event;
   h.hud_scales=h_hud_scales; h.vi_idle_step=h_vi_idle;
 #ifdef MELEE_LINUX_GRAPHICS
   h.native_pose_capture_enabled=h_pose_enabled;
@@ -932,6 +946,7 @@ bool reserve_memory(std::string* error) {
 
 bool initialize(const Config& config, std::string* error) {
   if (initialized || module || disc_fd >= 0) return fail(error, "native Linux host is already initialized; shut it down first");
+  recording = {};
   cfg=config; count={}; game={}; audio={}; stop_requested=false; stop_code=0; resimulating=false;
   next_retrace=ticks_per_frame; sound=1; progressive=0;
   if (!cfg.log_path.empty()) {
@@ -998,6 +1013,14 @@ int run() {
   try { return game.run(); }
   catch (const Stop& stopped) { return stopped.code; }
   catch (const std::exception& error) { log("native host failure: %s", error.what()); return 1; }
+}
+
+std::vector<uint8_t> recorded_replay() {
+  if (!cfg.vanilla_game || !recording.active() || recording.last_frame() < 0)
+    throw std::runtime_error("recording requires a vanilla match with gameplay events");
+  auto bytes = recording.encode();
+  if (bytes.empty()) throw std::runtime_error("recording: " + recording.error());
+  return bytes;
 }
 
 void shutdown() {

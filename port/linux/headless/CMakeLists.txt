@@ -17,7 +17,7 @@ if(NOT MELEE_CPU_BASELINE MATCHES "^(AVX2|AVX|SSE2)$")
   message(FATAL_ERROR "Unknown MELEE_CPU_BASELINE")
 endif()
 add_library(headless_services STATIC ../host_services.cpp ../input_script.cpp ../retrace_control.cpp ../process_checkpoint.cpp
-  "${PORT}/runtime/hle/ax_ucode.cpp")
+  "${PORT}/runtime/hle/ax_ucode.cpp" "${PORT}/runtime/hle/native_replay_stream.cpp")
 target_compile_features(headless_services PUBLIC cxx_std_17)
 target_include_directories(headless_services PUBLIC .. "${PORT}/runtime/abi"
   "${PORT}/runtime/hle" "${PORT}/runtime/host")
