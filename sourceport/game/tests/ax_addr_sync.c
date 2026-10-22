@@ -1,7 +1,9 @@
 #include <string.h>
 
 /* Include the production implementation so this test can inspect its DSP PB. */
-#include "../../extern/melee/libs/dolphin/src/dolphin/ax/AXVPB.c"
+/* Resolve through game_flags' SDK include directory so MELEE_DECOMP_DIR and
+ * Linux's LP64 overlay select the same implementation as the game build. */
+#include "ax/AXVPB.c"
 
 /* Other exported routines in AXVPB.c are outside this test's call graph. */
 BOOL OSDisableInterrupts(void) { return FALSE; }
