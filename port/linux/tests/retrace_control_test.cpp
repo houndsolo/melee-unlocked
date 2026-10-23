@@ -64,6 +64,21 @@ int main() {
       send_line(sockets[0], "quit\n"); require(!paused.get()); close(sockets[0]);
     }
     int fd[2]; require(socketpair(AF_UNIX, SOCK_STREAM, 0, fd) == 0);
+    {
+      MuStatePod before = match(); before.match_frame = 0;
+      Counters count{};
+      int normal[2]; require(socketpair(AF_UNIX, SOCK_STREAM, 0, normal) == 0);
+      RetraceControl late(normal[1], 10);
+      require(late.boundary(before, count) && !late.ready()); close(normal[0]);
+      int early[2]; require(socketpair(AF_UNIX, SOCK_STREAM, 0, early) == 0);
+      RetraceControl first(early[1], 10, {}, {}, {}, true);
+      auto paused = std::async(std::launch::async, [&] { return first.boundary(before, count); });
+      require(read_line(early[0]) == "MUCONTROL 2");
+      const auto initial = read_line(early[0]);
+      require(initial.rfind("STATE 0,2,2,0,", 0) == 0);
+      send_line(early[0], "observe\n"); require(read_line(early[0]) == initial);
+      send_line(early[0], "quit\n"); require(!paused.get()); close(early[0]);
+    }
     std::atomic<bool> ended{false};
     RetraceControl control(fd[1], 10, {}, [] { return std::vector<uint8_t>(1500, 0xab); },
                            [&] { return RecordingStatus{9, ended.load()}; });

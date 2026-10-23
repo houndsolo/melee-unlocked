@@ -79,6 +79,7 @@ void usage() {
             "              [--match 'stage p1_kind costume cpu level p2_kind costume cpu level [ports 0 1]']\n"
             "              [--stock-rules 'seconds stocks'] (60..600 in whole minutes; 1..4 stocks)\n"
             "              [--control-fd N --boot-limit N] (headless/fast; one VI per step)\n"
+            "              [--control-preroll] (pause as soon as both fighters exist)\n"
             "  melee_linux --memory-self-test | --version\n"
             "\nRequires a retail NTSC 1.02 ISO. Default display: 120 FPS; gameplay: 60 Hz.\n"
             "Keyboard: arrows = stick, Z/X/C/V = A/B/X/Y, Enter = Start,\n"
@@ -121,6 +122,7 @@ int main(int argc, char** argv) {
     double display_fps = 120;
     bool presenter_test = false;
     int control_fd = -1;
+    bool control_preroll = false;
     uint32_t boot_limit = 6000;
     std::error_code path_error;
     const auto binary = std::filesystem::read_symlink("/proc/self/exe", path_error);
@@ -182,6 +184,7 @@ int main(int argc, char** argv) {
         if (fd < 3 || fd > INT32_MAX) throw std::runtime_error("invalid control fd");
         control_fd = static_cast<int>(fd);
       }
+      else if (arg == "--control-preroll") control_preroll = true;
       else if (arg == "--boot-limit") {
         const auto limit = number(next(), "boot limit");
         if (!limit || limit > UINT32_MAX) throw std::runtime_error("invalid boot limit");
@@ -234,6 +237,8 @@ int main(int argc, char** argv) {
     if (config.has_stock_rules && !config.has_match)
       throw std::runtime_error("--stock-rules requires an explicit --match");
     config.volatile_card = control_fd >= 0;
+    if (control_preroll && control_fd < 0)
+      throw std::runtime_error("--control-preroll requires --control-fd");
     if (control_fd >= 0 && config.vanilla_game) setenv("MELEE_SOURCE_RECORD", "1", 1);
     std::string error;
     if (!linux_host::initialize(config, &error)) throw std::runtime_error(error);
@@ -255,7 +260,7 @@ int main(int argc, char** argv) {
           observer.digest.flush();
           if (!observer.digest) throw std::runtime_error("cannot flush checkpoint trace");
         }
-      }, linux_host::recorded_replay, linux_host::recording_status);
+      }, linux_host::recorded_replay, linux_host::recording_status, control_preroll);
     if (observer.control || observer.digest.is_open()) linux_host::set_frame_observer(observe, &observer);
     const int result = linux_host::run();
 #ifdef MELEE_LINUX_GRAPHICS

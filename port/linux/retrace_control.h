@@ -17,7 +17,8 @@ class RetraceControl {
  public:
   RetraceControl(int socket_fd, uint32_t boot_limit, std::function<void()> flush = {},
                  std::function<std::vector<uint8_t>()> replay = {},
-                 std::function<RecordingStatus()> recording_status = {});
+                 std::function<RecordingStatus()> recording_status = {},
+                 bool include_preroll = false);
   ~RetraceControl();
   RetraceControl(const RetraceControl&) = delete;
   RetraceControl& operator=(const RetraceControl&) = delete;
@@ -36,6 +37,7 @@ class RetraceControl {
   int fd_;
   uint32_t boot_limit_;
   bool ready_ = false;
+  bool include_preroll_ = false;
   std::array<MuPadStatus, 4> pads_{};
 };
 }

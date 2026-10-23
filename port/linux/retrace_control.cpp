@@ -18,10 +18,10 @@ void end(std::istream& in) {
   in >> std::ws;
   if (!in.eof()) throw std::runtime_error("control: unexpected trailing fields");
 }
-bool live_two_player_match(const MuStatePod& state) {
+bool live_two_player_match(const MuStatePod& state, bool include_preroll) {
   unsigned present = 0;
   for (const auto& player : state.player) present += player.present != 0;
-  return state.scene_major == 2 && state.scene == 2 && state.match_frame && present == 2;
+  return state.scene_major == 2 && state.scene == 2 && (state.match_frame || include_preroll) && present == 2;
 }
 }
 MuMatchOverride parse_fixed_match(const std::string& value) {
@@ -70,9 +70,10 @@ void write_observation(std::ostream& out, const MuStatePod& state, const Counter
 }
 RetraceControl::RetraceControl(int fd, uint32_t limit, std::function<void()> flush,
                                std::function<std::vector<uint8_t>()> replay,
-                               std::function<RecordingStatus()> recording_status)
+                               std::function<RecordingStatus()> recording_status,
+                               bool include_preroll)
     : replay_(std::move(replay)), recording_status_(std::move(recording_status)),
-      flush_(std::move(flush)), fd_(fd), boot_limit_(limit) {
+      flush_(std::move(flush)), fd_(fd), boot_limit_(limit), include_preroll_(include_preroll) {
   if (fd < 3 || !limit) throw std::runtime_error("control: invalid socket or boot limit");
 }
 RetraceControl::~RetraceControl() { close(fd_); }
@@ -101,7 +102,7 @@ bool RetraceControl::receive(std::string& line) {
 bool RetraceControl::boundary(const MuStatePod& state, const Counters& c) {
   if (!ready_) {
     // VS major/minor and live fighters, not a stale menu match-frame counter.
-    if (!live_two_player_match(state)) {
+    if (!live_two_player_match(state, include_preroll_)) {
       if (c.retraces >= boot_limit_) throw std::runtime_error("control: no match before boot retrace limit");
       return true;
     }
@@ -149,7 +150,7 @@ bool RetraceControl::boundary(const MuStatePod& state, const Counters& c) {
       continue;
     }
     if (line == "capture") {
-      if (!live_two_player_match(state)) {
+      if (!live_two_player_match(state, include_preroll_)) {
         send("UNSUPPORTED checkpoint requires a live two-player VS match\n"); continue;
       }
       try {

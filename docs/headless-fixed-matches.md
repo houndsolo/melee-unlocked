@@ -30,8 +30,20 @@ wire protocol are unchanged.
 The cooperative controller and checkpoint gate recognize exactly two live
 fighters, including non-default slots. All four PAD samples still pass through
 ordinary polling. Callers must connect the active ports and disconnect unused
-ones explicitly. Initial control still waits for a positive match counter;
-this does not cover playable pre-clock replay frames.
+ones explicitly. Initial control waits for a positive match counter by default.
+`--control-preroll` opts into a pause as soon as both fighters exist, while the
+native match counter is zero. The independent signed recording status begins at
+-123 in the measured case and advances one per VI. Early capture/restore uses the
+same session-local process checkpoint; no game ABI/timing/math change is involved.
+The flag requires `--control-fd`.
+
+A genuine pre-clock probe captures at replay -40 and controls both fighters before
+frame 0. Three restores and a fresh boot reproduce observations and bytes. Official
+Playback is nine-field exact over the requested playable interval -39..140 (360
+player-frames). A strict wider audit -123..140 retains one Falco Y word mismatch
+at -113; all other compared words match. Full Ready-state equality is not claimed,
+and no tolerance or math change was introduced. Native observations match their
+seven recorded fields over the entire interval using observed signed counters.
 
 Validation in YT2SLP's GCC 14 Docker environment: 10 host/component tests and
 23 game-library tests passed. A local retail-ISO probe captured at 241, restored
