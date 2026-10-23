@@ -19,7 +19,7 @@
 extern "C" {
 #endif
 
-#define MU_HOST_API_VERSION 20
+#define MU_HOST_API_VERSION 21
 #define MU_GAME_API_VERSION 6
 #define MU_SLIPPI_RESPONSE_CAPACITY 4096u
 
@@ -354,6 +354,11 @@ typedef struct MuHostApi {
      * Returns 1 with seconds/stocks, 0 to retain ordinary menu rules. No timing
      * or physics override: the game applies these before constructing the match. */
     int32_t (*stock_rules_override)(int32_t* seconds, int32_t* stocks);
+
+    /* Version 21. Optional offline initial seed at Slippi RestoreGameInfo's
+     * match-start boundary, before Game Start recording and match construction.
+     * Distinct from the existing later item-setup rng_seed_override callback. */
+    void (*game_start_rng_seed_override)(uint32_t* seed, int32_t* has_value);
 } MuHostApi;
 
 /* "Low poly fighters": the fighter draw shows the game's own far model (the one it draws in the

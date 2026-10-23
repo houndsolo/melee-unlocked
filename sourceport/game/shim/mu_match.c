@@ -110,3 +110,16 @@ void mu_seed_request(void)
         mu_host->mark_match_start();
     }
 }
+
+void mu_game_start_seed_request(void)
+{
+    if (mu_host->version >= 21 && mu_host->game_start_rng_seed_override != NULL) {
+        uint32_t seed = 0;
+        int32_t has_value = 0;
+        mu_host->game_start_rng_seed_override(&seed, &has_value);
+        if (has_value) {
+            mu_apply_seed(seed);
+            if (mu_host->log) mu_host->log("rng-seed: forced (Slippi Game Start boundary)");
+        }
+    }
+}

@@ -38,6 +38,20 @@ No live coordinates, update logic, timing or math are changed. Omitting this
 option preserves ordinary per-slot starts and the previous recording bytes.
 Rebuild host and game together after the API change.
 
+Host API **21** appends optional `game_start_rng_seed_override`. The CLI's
+`--rng-seed-boundary slippi-game-start` requires `--rng-seed` and applies it at
+the existing native RestoreGameInfo boundary, before genuine Game Start recording.
+The later item-setup callback then returns absent. Default `item-setup` behavior
+is unchanged; playback/online seed handling is untouched. The recorded seed comes
+from the actual game RNG, without editing encoded metadata. Docker unit/host
+checks cover callback exclusivity and old-version/null guards; an ISO search
+records the supplied 33480 and reproduces fresh observations/keys/replay bytes.
+The prior default two-jump replay remains byte-identical. This aligns an initial
+seed boundary, not a source replay's full code set or subsequent hidden state.
+Both accepted branches of the unchanged 64-program supplied-example grid also
+pass actual official Playback and nine-field comparison over 1..17 (68
+player-frames total), with resync disabled and requested/recorded seed 33480.
+
 The first real-footage opening search used all 72 declared two-controller
 programs at replay checkpoint -40. Ordinary slot starts rejected all 72. With
 the source's visibly left/right starting platforms declared as indices 0/1,

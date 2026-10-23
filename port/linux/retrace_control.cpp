@@ -24,6 +24,11 @@ bool live_two_player_match(const MuStatePod& state, bool include_preroll) {
   return state.scene_major == 2 && state.scene == 2 && (state.match_frame || include_preroll) && present == 2;
 }
 }
+bool parse_rng_seed_boundary(const std::string& value) {
+  if (value == "item-setup") return false;
+  if (value == "slippi-game-start") return true;
+  throw std::runtime_error("rng seed boundary must be item-setup or slippi-game-start");
+}
 MuMatchOverride parse_fixed_match(const std::string& value) {
   std::istringstream in(value);
   MuMatchOverride match{};

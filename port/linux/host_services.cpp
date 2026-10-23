@@ -780,8 +780,14 @@ int32_t h_stock_rules(int32_t* seconds, int32_t* stocks) {
   return 1;
 }
 void h_rng(uint32_t* seed, int32_t* has) {
-  if (has) *has = cfg.has_rng_seed;
-  if (cfg.has_rng_seed && seed) *seed = cfg.rng_seed;
+  const bool enabled = cfg.has_rng_seed && !cfg.rng_seed_game_start;
+  if (has) *has = enabled;
+  if (enabled && seed) *seed = cfg.rng_seed;
+}
+void h_game_start_rng(uint32_t* seed, int32_t* has) {
+  const bool enabled = cfg.has_rng_seed && cfg.rng_seed_game_start;
+  if (has) *has = enabled;
+  if (enabled && seed) *seed = cfg.rng_seed;
 }
 void h_match_start() {
   input_script.mark_match_start(count.retraces);
@@ -819,6 +825,7 @@ void h_replay_event(uint8_t command, const uint8_t* payload, uint32_t size) {
 MuHostApi make_api() {
   MuHostApi h{};
   h.version = MU_HOST_API_VERSION;
+  h.game_start_rng_seed_override=h_game_start_rng;
   h.log=h_log; h.panic=h_panic; h.ticks=h_ticks; h.boot_time=h_boot_time; h.poll=h_poll;
   h.gx_fifo=h_fifo; h.vi_configure=h_vi_configure; h.vi_set_next_framebuffer=h_framebuffer;
   h.vi_flush=h_void; h.vi_retrace_count=h_retraces; h.vi_next_field=h_next_field;
@@ -1105,6 +1112,15 @@ bool service_self_test(const char* scratch_directory, std::string* error) {
     if (!reserve_memory(&reserve_error)) throw std::runtime_error(reserve_error);
     cfg={}; cfg.card_dir=test_dir.string(); count={}; boot_ticks=123ull*MU_TB_HZ;
     api=make_api(); aram.assign(aram_bytes,0);
+    for (bool game_start : {false, true}) {
+      cfg.has_rng_seed=true; cfg.rng_seed=33480; cfg.rng_seed_game_start=game_start;
+      uint32_t seed=0; int32_t has=0;
+      api.rng_seed_override(&seed,&has);
+      expect(has == !game_start && (game_start || seed == 33480),"legacy seed callback boundary selection");
+      seed=0; has=0; api.game_start_rng_seed_override(&seed,&has);
+      expect(has == game_start && (!game_start || seed == 33480),"Game Start seed callback boundary selection");
+    }
+    cfg.has_rng_seed=false; cfg.rng_seed_game_start=false;
     expect(api.replay_event && api.replay_finished,"recording lifecycle callbacks installed");
     api.replay_finished(); // The real game invokes this after emitting Game End.
     std::memcpy(disc_header.data(),"GALE01",6);

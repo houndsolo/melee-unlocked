@@ -30,6 +30,7 @@ struct Config {
   bool trace_state = false;
   bool has_rng_seed = false;
   uint32_t rng_seed = 0;
+  bool rng_seed_game_start = false; // Opt-in; otherwise retain the item-setup boundary.
   bool has_time_base = false;
   uint64_t time_base = 0; // GameCube epoch, 40.5 MHz ticks since 2000-01-01.
   bool has_match = false;

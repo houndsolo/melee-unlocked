@@ -17,6 +17,7 @@ int mu_match_request(int* stage, int* kind, int* cpu, int* level, int* costume,
                      int count);
 void mu_seed_request(void);
 void mu_rng_seed_request(void);
+void mu_game_start_seed_request(void);
 int mu_stock_rules_request(int* seconds, int* stocks);
 int mu_spawn_request(int* points, int count);
 
@@ -134,6 +135,20 @@ int main(void)
     check(g_apply_calls == 1 && g_applied_seed == 0xCAFEBABEu, "v3 host with seed: seed applied");
     mu_seed_request();
     check(g_mark_calls == 1, "v3 host with seed: first VS frame marks match start");
+
+    g_host.game_start_rng_seed_override = stub_rng_seed_override;
+    g_host.version = 20; g_apply_calls = 0;
+    mu_game_start_seed_request();
+    check(g_apply_calls == 0, "pre-v21 host never reads Game Start seed callback");
+    g_host.version = MU_HOST_API_VERSION; g_stub_has_value = 0;
+    mu_game_start_seed_request();
+    check(g_apply_calls == 0, "absent Game Start request leaves RNG untouched");
+    g_stub_has_value = 1; mu_game_start_seed_request();
+    check(g_apply_calls == 1 && g_applied_seed == 0xCAFEBABEu && g_mark_calls == 1,
+          "explicit Game Start seed changes RNG without changing input origin");
+    g_host.game_start_rng_seed_override = NULL;
+    mu_game_start_seed_request();
+    check(g_apply_calls == 1, "null optional Game Start callback is safe");
 
     /* The appended v19 callback must not be read through an older host. */
     {

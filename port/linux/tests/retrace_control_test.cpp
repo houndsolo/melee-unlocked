@@ -28,6 +28,10 @@ MuStatePod match() {
 }
 int main() {
   try {
+    require(!parse_rng_seed_boundary("item-setup") && parse_rng_seed_boundary("slippi-game-start"));
+    bool bad_boundary=false;
+    try { parse_rng_seed_boundary("auto"); } catch (const std::exception&) { bad_boundary=true; }
+    require(bad_boundary);
     auto fixed = parse_fixed_match("31 2 0 0 9 20 3 1 4");
     require(fixed.stage == 31 && fixed.players[0].kind == 2 && fixed.players[1].kind == 20);
     require(fixed.players[1].cpu == 1 && fixed.players[1].costume == 3 && fixed.players[5].kind == -1);

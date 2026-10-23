@@ -75,6 +75,7 @@ void usage() {
             "              [--game-library path] [--log-file path] [--state-digest path]\n"
             "              [--fps 60..1000] [--card-dir path] [--no-gc-adapter]\n"
             "              [--input-script path] [--capture frame.ppm] [--vanilla-game]\n"
+            "              [--rng-seed-boundary item-setup|slippi-game-start]\n"
             "              [--rng-seed N] [--time-base N] [--trace-state]\n"
             "              [--match 'stage p1_kind costume cpu level p2_kind costume cpu level [ports 0 1] [spawns 0 1]']\n"
             "              [--stock-rules 'seconds stocks'] (60..600 in whole minutes; 1..4 stocks)\n"
@@ -167,6 +168,7 @@ int main(int argc, char** argv) {
       }
       else if (arg == "--no-gc-adapter") config.no_gc_adapter = true;
       else if (arg == "--vanilla-game") config.vanilla_game = true;
+      else if (arg == "--rng-seed-boundary") config.rng_seed_game_start = linux_host::parse_rng_seed_boundary(next());
       else if (arg == "--game-library") config.game_path = next();
       else if (arg == "--log-file") config.log_path = next();
       else if (arg == "--card-dir") config.card_dir = next();
@@ -237,6 +239,8 @@ int main(int argc, char** argv) {
     if (config.has_stock_rules && !config.has_match)
       throw std::runtime_error("--stock-rules requires an explicit --match");
     config.volatile_card = control_fd >= 0;
+    if (config.rng_seed_game_start && !config.has_rng_seed)
+      throw std::runtime_error("slippi-game-start requires --rng-seed");
     if (control_preroll && control_fd < 0)
       throw std::runtime_error("--control-preroll requires --control-fd");
     if (control_fd >= 0 && config.vanilla_game) setenv("MELEE_SOURCE_RECORD", "1", 1);

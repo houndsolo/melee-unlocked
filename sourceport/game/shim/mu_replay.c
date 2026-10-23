@@ -52,6 +52,7 @@ int mu_replay_abi_stock_steal(int frame, int port);
 void mu_replay_abi_event(unsigned int command, const unsigned char* payload, unsigned int size);
 void mu_replay_abi_finished(void);
 void mu_replay_abi_log(const char* text);
+void mu_game_start_seed_request(void);
 int snprintf(char* buffer, __SIZE_TYPE__ size, const char* format, ...);
 
 enum { REPLAY_CONTINUE = 1, REPLAY_TERMINATE = 2 };
@@ -305,6 +306,12 @@ void mu_replay_start_melee(StartMeleeData* data)
     recording_active = 0;
     recording_online = 0;
     if (info == NULL) {
+        /* Same initial RNG boundary as RestoreGameInfo below. An offline host
+         * may supply it explicitly; playback/online retain their own seeds. */
+        if (!mu_online_pending() &&
+            (gm_GetCurrentGameMode() == GM_VS || gm_GetCurrentGameMode() == GM_DEBUG_VS)) {
+            mu_game_start_seed_request();
+        }
         const char* record = getenv("MELEE_SOURCE_RECORD");
         /* An online match is recorded once InitOnlinePlay has set it up (mu_replay_online_start).
          * "1": recorded to a .slp (--record-native); "2": recorded for the spectator server only,
