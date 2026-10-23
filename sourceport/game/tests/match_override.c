@@ -17,6 +17,7 @@ int mu_match_request(int* stage, int* kind, int* cpu, int* level, int* costume,
                      int count);
 void mu_seed_request(void);
 void mu_rng_seed_request(void);
+int mu_stock_rules_request(int* seconds, int* stocks);
 
 const MuHostApi* mu_host;
 static MuHostApi g_host;
@@ -27,6 +28,13 @@ static int g_apply_calls;
 static uint32_t g_applied_seed;
 static uint32_t g_stub_seed;
 static int32_t g_stub_has_value;
+static int g_rules_calls, g_rules_present, g_seconds, g_stocks;
+static int32_t stub_stock_rules(int32_t* seconds, int32_t* stocks)
+{
+    ++g_rules_calls;
+    *seconds = g_seconds; *stocks = g_stocks;
+    return g_rules_present;
+}
 
 static const MuMatchOverride* stub_override(void) { return g_result; }
 static void stub_mark_match_start(void) { ++g_mark_calls; }
@@ -125,6 +133,28 @@ int main(void)
     check(g_apply_calls == 1 && g_applied_seed == 0xCAFEBABEu, "v3 host with seed: seed applied");
     mu_seed_request();
     check(g_mark_calls == 1, "v3 host with seed: first VS frame marks match start");
+
+    /* The appended v19 callback must not be read through an older host. */
+    {
+        int seconds = -1, stocks = -1;
+        g_host.stock_rules_override = stub_stock_rules;
+        g_rules_present = 1; g_seconds = 480; g_stocks = 4;
+        g_host.version = 18;
+        check(!mu_stock_rules_request(&seconds, &stocks) && g_rules_calls == 0,
+              "pre-v19 host leaves rules untouched");
+        g_host.version = MU_HOST_API_VERSION;
+        check(mu_stock_rules_request(&seconds, &stocks) && seconds == 480 && stocks == 4,
+              "explicit stock countdown and count");
+        g_rules_present = 0;
+        seconds = stocks = -1;
+        check(!mu_stock_rules_request(&seconds, &stocks) && seconds == -1 && stocks == -1,
+              "no request retains defaults");
+        g_rules_present = 1; g_seconds = 479;
+        check(!mu_stock_rules_request(&seconds, &stocks) && seconds == -1 && stocks == -1,
+              "invalid host rules never partially apply");
+        g_host.stock_rules_override = NULL;
+        check(!mu_stock_rules_request(&seconds, &stocks), "null rules callback is optional");
+    }
 
     if (!failures) printf("match override: all cases pass\n");
     return failures != 0;

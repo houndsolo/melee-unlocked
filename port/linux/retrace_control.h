@@ -10,6 +10,7 @@
 namespace linux_host {
 // Restricted to ordinary two-player retail VS matches. External IDs, not FtKind/GrKind.
 MuMatchOverride parse_fixed_match(const std::string& value);
+void parse_stock_rules(const std::string& value, int32_t& seconds, int32_t& stocks);
 void write_observation(std::ostream&, const MuStatePod&, const Counters&);
 
 class RetraceControl {

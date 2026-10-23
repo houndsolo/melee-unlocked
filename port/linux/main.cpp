@@ -76,7 +76,8 @@ void usage() {
             "              [--fps 60..1000] [--card-dir path] [--no-gc-adapter]\n"
             "              [--input-script path] [--capture frame.ppm] [--vanilla-game]\n"
             "              [--rng-seed N] [--time-base N] [--trace-state]\n"
-            "              [--match 'stage p1_kind costume cpu level p2_kind costume cpu level']\n"
+            "              [--match 'stage p1_kind costume cpu level p2_kind costume cpu level [ports 0 1]']\n"
+            "              [--stock-rules 'seconds stocks'] (60..600 in whole minutes; 1..4 stocks)\n"
             "              [--control-fd N --boot-limit N] (headless/fast; one VI per step)\n"
             "  melee_linux --memory-self-test | --version\n"
             "\nRequires a retail NTSC 1.02 ISO. Default display: 120 FPS; gameplay: 60 Hz.\n"
@@ -172,6 +173,10 @@ int main(int argc, char** argv) {
       else if (arg == "--match") {
         config.match = linux_host::parse_fixed_match(next()); config.has_match = true;
       }
+      else if (arg == "--stock-rules") {
+        linux_host::parse_stock_rules(next(), config.stock_seconds, config.stock_count);
+        config.has_stock_rules = true;
+      }
       else if (arg == "--control-fd") {
         const auto fd = number(next(), "control fd");
         if (fd < 3 || fd > INT32_MAX) throw std::runtime_error("invalid control fd");
@@ -226,6 +231,8 @@ int main(int argc, char** argv) {
 #endif
     if (control_fd >= 0 && (!config.headless || config.pace || config.max_frames || !config.has_match))
       throw std::runtime_error("control requires --headless --fast --match, without --frames");
+    if (config.has_stock_rules && !config.has_match)
+      throw std::runtime_error("--stock-rules requires an explicit --match");
     config.volatile_card = control_fd >= 0;
     if (control_fd >= 0 && config.vanilla_game) setenv("MELEE_SOURCE_RECORD", "1", 1);
     std::string error;

@@ -18,11 +18,18 @@ void end(std::istream& in) {
   in >> std::ws;
   if (!in.eof()) throw std::runtime_error("control: unexpected trailing fields");
 }
+bool live_two_player_match(const MuStatePod& state) {
+  unsigned present = 0;
+  for (const auto& player : state.player) present += player.present != 0;
+  return state.scene_major == 2 && state.scene == 2 && state.match_frame && present == 2;
+}
 }
 MuMatchOverride parse_fixed_match(const std::string& value) {
   std::istringstream in(value);
   MuMatchOverride match{};
-  match.stage = integer(in, 31, 32); // Battlefield / Final Destination (StKind)
+  match.stage = integer(in, 0, 32);
+  if (match.stage != 8 && match.stage != 31 && match.stage != 32)
+    throw std::runtime_error("control: supported stages are Yoshi's Story, Battlefield and Final Destination");
   for (auto& p : match.players) p.kind = -1;
   for (unsigned i = 0; i < 2; ++i) {
     auto& p = match.players[i];
@@ -31,8 +38,26 @@ MuMatchOverride parse_fixed_match(const std::string& value) {
     p.cpu = integer(in, 0, 1);
     p.cpu_level = integer(in, 1, 9);
   }
+  in >> std::ws;
+  if (!in.eof()) {
+    std::string tag;
+    in >> tag;
+    if (tag != "ports") throw std::runtime_error("control: expected optional ports");
+    const int first = integer(in, 0, 3), second = integer(in, 0, 3);
+    if (first == second) throw std::runtime_error("control: player ports must differ");
+    const auto a = match.players[0], b = match.players[1];
+    for (auto& p : match.players) p.kind = -1;
+    match.players[first] = a; match.players[second] = b;
+  }
   end(in);
   return match;
+}
+void parse_stock_rules(const std::string& value, int32_t& seconds, int32_t& stocks) {
+  std::istringstream in(value);
+  const int parsed_seconds = integer(in, 60, 600), parsed_stocks = integer(in, 1, 4);
+  end(in);
+  if (parsed_seconds % 60) throw std::runtime_error("control: stock timer requires whole minutes");
+  seconds = parsed_seconds; stocks = parsed_stocks;
 }
 void write_observation(std::ostream& out, const MuStatePod& state, const Counters& c) {
   out << c.retraces << ',' << state.scene_major << ',' << state.scene << ','
@@ -76,8 +101,7 @@ bool RetraceControl::receive(std::string& line) {
 bool RetraceControl::boundary(const MuStatePod& state, const Counters& c) {
   if (!ready_) {
     // VS major/minor and live fighters, not a stale menu match-frame counter.
-    if (state.scene_major != 2 || state.scene != 2 || !state.match_frame ||
-        !state.player[0].present || !state.player[1].present) {
+    if (!live_two_player_match(state)) {
       if (c.retraces >= boot_limit_) throw std::runtime_error("control: no match before boot retrace limit");
       return true;
     }
@@ -125,8 +149,7 @@ bool RetraceControl::boundary(const MuStatePod& state, const Counters& c) {
       continue;
     }
     if (line == "capture") {
-      if (state.scene_major != 2 || state.scene != 2 || !state.match_frame ||
-          !state.player[0].present || !state.player[1].present) {
+      if (!live_two_player_match(state)) {
         send("UNSUPPORTED checkpoint requires a live two-player VS match\n"); continue;
       }
       try {

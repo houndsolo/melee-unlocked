@@ -34,6 +34,9 @@ struct Config {
   uint64_t time_base = 0; // GameCube epoch, 40.5 MHz ticks since 2000-01-01.
   bool has_match = false;
   MuMatchOverride match{};
+  bool has_stock_rules = false;
+  int32_t stock_seconds = 0;
+  int32_t stock_count = 0;
 };
 
 struct Counters {

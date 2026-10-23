@@ -42,6 +42,24 @@ int mu_match_request(int* stage, int* kind, int* cpu, int* level, int* costume,
     return 1;
 }
 
+/* Optional ordinary stock rules, applied before constructing the VS match.
+ * Older hosts and hosts without an explicit request leave menu defaults alone. */
+int mu_stock_rules_request(int* seconds, int* stocks)
+{
+    int32_t requested_seconds, requested_stocks;
+    if (mu_host->version < 19 || mu_host->stock_rules_override == NULL ||
+        !mu_host->stock_rules_override(&requested_seconds, &requested_stocks)) {
+        return 0;
+    }
+    if (requested_seconds < 60 || requested_seconds > 600 || requested_seconds % 60 ||
+        requested_stocks < 1 || requested_stocks > 4) {
+        return 0;
+    }
+    *seconds = requested_seconds;
+    *stocks = requested_stocks;
+    return 1;
+}
+
 /* --rng-seed (M7 lockstep parity): the seed is set at the first in-match setup RNG boundary,
  * immediately before it_8026D018 draws the ambient item-spawn delay. The previous first-frame
  * hook ran after this gameplay-affecting draw, leaving it uncontrolled. Mark the scripted input

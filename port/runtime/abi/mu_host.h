@@ -19,7 +19,7 @@
 extern "C" {
 #endif
 
-#define MU_HOST_API_VERSION 18
+#define MU_HOST_API_VERSION 19
 #define MU_GAME_API_VERSION 6
 #define MU_SLIPPI_RESPONSE_CAPACITY 4096u
 
@@ -345,6 +345,11 @@ typedef struct MuHostApi {
     /* Version 18. Display-only options (MU_DISPLAY_OPTION_*), read live each draw. Never recorded
      * in a replay and never sent to an opponent: nothing the simulation reads follows them. */
     uint32_t (*display_options)(void);
+
+    /* Version 19. Optional fixed stock-match setup for offline scripted runs.
+     * Returns 1 with seconds/stocks, 0 to retain ordinary menu rules. No timing
+     * or physics override: the game applies these before constructing the match. */
+    int32_t (*stock_rules_override)(int32_t* seconds, int32_t* stocks);
 } MuHostApi;
 
 /* "Low poly fighters": the fighter draw shows the game's own far model (the one it draws in the

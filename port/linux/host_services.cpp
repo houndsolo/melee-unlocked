@@ -773,6 +773,12 @@ int32_t h_progressive() { return progressive; }
 void h_set_progressive(int32_t value) { progressive = value != 0; }
 void h_stop(int32_t reason, int32_t code) { log("game stopped: reason=%d code=%d", reason, code); throw Stop{reason == MU_STOP_PANIC ? 1 : code}; }
 const MuMatchOverride* h_match() { return cfg.has_match ? &cfg.match : nullptr; }
+int32_t h_stock_rules(int32_t* seconds, int32_t* stocks) {
+  if (!cfg.has_stock_rules) return 0;
+  *seconds = cfg.stock_seconds;
+  *stocks = cfg.stock_count;
+  return 1;
+}
 void h_rng(uint32_t* seed, int32_t* has) {
   if (has) *has = cfg.has_rng_seed;
   if (cfg.has_rng_seed && seed) *seed = cfg.rng_seed;
@@ -833,6 +839,7 @@ MuHostApi make_api() {
   h.progressive_mode=h_progressive; h.set_progressive_mode=h_set_progressive;
   h.reset_code=h_zero_i32; h.reset_switch=h_zero_i32; h.stop=h_stop;
   h.match_override=h_match; h.rng_seed_override=h_rng; h.mark_match_start=h_match_start;
+  h.stock_rules_override=h_stock_rules;
   h.native_pose_capture_enabled=h_zero_i32; h.native_owner_tracking=h_zero_i32;
   h.game_options=h_options; h.game_options2=h_zero_u32; h.game_options3=h_zero_u32;
   h.display_options=h_zero_u32; h.music_volume=h_music; h.native_draw_identity=h_zero_i32;

@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <utility>
 using namespace linux_host;
 using namespace std::chrono_literals;
 void require(bool good) { if (!good) throw std::runtime_error("control test failed"); }
@@ -30,12 +31,37 @@ int main() {
     auto fixed = parse_fixed_match("31 2 0 0 9 20 3 1 4");
     require(fixed.stage == 31 && fixed.players[0].kind == 2 && fixed.players[1].kind == 20);
     require(fixed.players[1].cpu == 1 && fixed.players[1].costume == 3 && fixed.players[5].kind == -1);
+    auto tournament = parse_fixed_match("8 20 0 0 9 0 0 0 9 ports 1 2");
+    require(tournament.stage == 8 && tournament.players[0].kind == -1 &&
+            tournament.players[1].kind == 20 && tournament.players[2].kind == 0 &&
+            tournament.players[3].kind == -1);
     for (const auto* invalid : {"", "30 2 0 0 9 20 0 0 9", "31 26 0 0 9 20 0 0 9",
          "31 2 4 0 9 20 0 0 9", "31 2 0 0 0 20 0 0 9", "31 2 0 2 9 20 0 0 9",
-         "31 2 0 0 9 20 0 0 9 extra", "31 2 0 0 9 20 0 0"}) {
+         "31 2 0 0 9 20 0 0 9 extra", "31 2 0 0 9 20 0 0",
+         "8 20 0 0 9 0 0 0 9 ports 1 1", "8 20 0 0 9 0 0 0 9 ports 1 4",
+         "8 20 0 0 9 0 0 0 9 ports 1 2 extra", "8 20 0 0 9 0 0 0 9 ports 1"}) {
       bool rejected = false;
       try { parse_fixed_match(invalid); } catch (const std::exception&) { rejected = true; }
       require(rejected);
+    }
+    int32_t seconds = -1, stocks = -1;
+    parse_stock_rules("480 4", seconds, stocks);
+    require(seconds == 480 && stocks == 4);
+    for (const auto* invalid : {"", "0 4", "601 4", "479 4", "480 0", "480 5", "480", "480 4 extra"}) {
+      bool rejected = false;
+      try { parse_stock_rules(invalid, seconds, stocks); } catch (const std::exception&) { rejected = true; }
+      require(rejected && seconds == 480 && stocks == 4);
+    }
+    // Real transport, synthetic states: any declared pair can reach a pause.
+    for (const auto ports : {std::pair{1, 2}, std::pair{0, 3}, std::pair{2, 3}}) {
+      int sockets[2]; require(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
+      RetraceControl other(sockets[1], 10);
+      MuStatePod s{}; s.scene_major = s.scene = 2; s.match_frame = 1;
+      s.player[ports.first].present = s.player[ports.second].present = 1;
+      Counters counts{};
+      auto paused = std::async(std::launch::async, [&] { return other.boundary(s, counts); });
+      require(read_line(sockets[0]) == "MUCONTROL 2"); read_line(sockets[0]);
+      send_line(sockets[0], "quit\n"); require(!paused.get()); close(sockets[0]);
     }
     int fd[2]; require(socketpair(AF_UNIX, SOCK_STREAM, 0, fd) == 0);
     std::atomic<bool> ended{false};
