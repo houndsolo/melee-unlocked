@@ -76,7 +76,7 @@ void usage() {
             "              [--fps 60..1000] [--card-dir path] [--no-gc-adapter]\n"
             "              [--input-script path] [--capture frame.ppm] [--vanilla-game]\n"
             "              [--rng-seed N] [--time-base N] [--trace-state]\n"
-            "              [--match 'stage p1_kind costume cpu level p2_kind costume cpu level [ports 0 1]']\n"
+            "              [--match 'stage p1_kind costume cpu level p2_kind costume cpu level [ports 0 1] [spawns 0 1]']\n"
             "              [--stock-rules 'seconds stocks'] (60..600 in whole minutes; 1..4 stocks)\n"
             "              [--control-fd N --boot-limit N] (headless/fast; one VI per step)\n"
             "              [--control-preroll] (pause as soon as both fighters exist)\n"

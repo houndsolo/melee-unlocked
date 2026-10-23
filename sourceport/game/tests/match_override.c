@@ -18,6 +18,7 @@ int mu_match_request(int* stage, int* kind, int* cpu, int* level, int* costume,
 void mu_seed_request(void);
 void mu_rng_seed_request(void);
 int mu_stock_rules_request(int* seconds, int* stocks);
+int mu_spawn_request(int* points, int count);
 
 const MuHostApi* mu_host;
 static MuHostApi g_host;
@@ -154,6 +155,24 @@ int main(void)
               "invalid host rules never partially apply");
         g_host.stock_rules_override = NULL;
         check(!mu_stock_rules_request(&seconds, &stocks), "null rules callback is optional");
+    }
+
+    {
+        int points[6] = {-99, -99, -99, -99, -99, -99};
+        g_host.match_override = stub_override; g_result = &g_over;
+        g_over.has_spawn_points = 1;
+        for (i = 0; i < 6; i++) g_over.spawn_points[i] = -1;
+        g_over.spawn_points[0] = 0; g_over.spawn_points[1] = 1;
+        g_host.version = 19;
+        check(!mu_spawn_request(points, 6) && points[0] == -99, "pre-v20 leaves spawn setup untouched");
+        g_host.version = MU_HOST_API_VERSION;
+        check(mu_spawn_request(points, 6) && points[0] == 0 && points[1] == 1 && points[2] == -1,
+              "explicit ordinary stage start-point indices");
+        g_over.has_spawn_points = 0;
+        check(!mu_spawn_request(points, 6), "default spawn layout unchanged");
+        g_over.has_spawn_points = 1; g_over.spawn_points[0] = 4;
+        points[0] = -99;
+        check(!mu_spawn_request(points, 6) && points[0] == -99, "invalid spawn cannot partially apply");
     }
 
     if (!failures) printf("match override: all cases pass\n");

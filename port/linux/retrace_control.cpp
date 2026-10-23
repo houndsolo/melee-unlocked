@@ -38,18 +38,29 @@ MuMatchOverride parse_fixed_match(const std::string& value) {
     p.cpu = integer(in, 0, 1);
     p.cpu_level = integer(in, 1, 9);
   }
-  in >> std::ws;
-  if (!in.eof()) {
+  int ports[2] = {0, 1}, spawns[2] = {-1, -1};
+  bool saw_ports = false;
+  while (true) {
+    in >> std::ws;
+    if (in.eof()) break;
     std::string tag;
     in >> tag;
-    if (tag != "ports") throw std::runtime_error("control: expected optional ports");
-    const int first = integer(in, 0, 3), second = integer(in, 0, 3);
-    if (first == second) throw std::runtime_error("control: player ports must differ");
-    const auto a = match.players[0], b = match.players[1];
-    for (auto& p : match.players) p.kind = -1;
-    match.players[first] = a; match.players[second] = b;
+    if (tag == "ports" && !saw_ports) {
+      ports[0] = integer(in, 0, 3); ports[1] = integer(in, 0, 3); saw_ports = true;
+      if (ports[0] == ports[1]) throw std::runtime_error("control: player ports must differ");
+    } else if (tag == "spawns" && !match.has_spawn_points) {
+      spawns[0] = integer(in, 0, 3); spawns[1] = integer(in, 0, 3); match.has_spawn_points = 1;
+      if (spawns[0] == spawns[1]) throw std::runtime_error("control: initial spawn points must differ");
+    } else throw std::runtime_error("control: expected optional ports/spawns once each");
   }
   end(in);
+  const auto a = match.players[0], b = match.players[1];
+  for (auto& p : match.players) p.kind = -1;
+  for (auto& point : match.spawn_points) point = -1;
+  match.players[ports[0]] = a; match.players[ports[1]] = b;
+  if (match.has_spawn_points) {
+    match.spawn_points[ports[0]] = spawns[0]; match.spawn_points[ports[1]] = spawns[1];
+  }
   return match;
 }
 void parse_stock_rules(const std::string& value, int32_t& seconds, int32_t& stocks) {

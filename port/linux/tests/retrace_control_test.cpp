@@ -35,11 +35,18 @@ int main() {
     require(tournament.stage == 8 && tournament.players[0].kind == -1 &&
             tournament.players[1].kind == 20 && tournament.players[2].kind == 0 &&
             tournament.players[3].kind == -1);
+    require(!tournament.has_spawn_points);
+    auto positions = parse_fixed_match("8 20 0 0 9 0 0 0 9 ports 1 2 spawns 0 1");
+    require(positions.has_spawn_points && positions.spawn_points[0] == -1 &&
+            positions.spawn_points[1] == 0 && positions.spawn_points[2] == 1);
     for (const auto* invalid : {"", "30 2 0 0 9 20 0 0 9", "31 26 0 0 9 20 0 0 9",
          "31 2 4 0 9 20 0 0 9", "31 2 0 0 0 20 0 0 9", "31 2 0 2 9 20 0 0 9",
          "31 2 0 0 9 20 0 0 9 extra", "31 2 0 0 9 20 0 0",
          "8 20 0 0 9 0 0 0 9 ports 1 1", "8 20 0 0 9 0 0 0 9 ports 1 4",
-         "8 20 0 0 9 0 0 0 9 ports 1 2 extra", "8 20 0 0 9 0 0 0 9 ports 1"}) {
+         "8 20 0 0 9 0 0 0 9 ports 1 2 extra", "8 20 0 0 9 0 0 0 9 ports 1",
+         "8 20 0 0 9 0 0 0 9 spawns 0 0", "8 20 0 0 9 0 0 0 9 spawns 0 4",
+         "8 20 0 0 9 0 0 0 9 spawns 0", "8 20 0 0 9 0 0 0 9 ports 1 2 ports 0 1",
+         "8 20 0 0 9 0 0 0 9 spawns 0 1 spawns 0 2"}) {
       bool rejected = false;
       try { parse_fixed_match(invalid); } catch (const std::exception&) { rejected = true; }
       require(rejected);

@@ -120566,7 +120566,7 @@ index edf865c..df647f9 100644
  /* 16CF4C */ void fn_8016CF4C(int, MatchOutcome);
  /* 16CFE0 */ void fn_8016CFE0(void);
 diff --git a/src/melee/gm/gmvsmelee.c b/src/melee/gm/gmvsmelee.c
-index 61bebcfb0..4fb674e4c 100644
+index 61bebcfb0..47fb987a3 100644
 --- a/src/melee/gm/gmvsmelee.c
 +++ b/src/melee/gm/gmvsmelee.c
 @@ -18,6 +18,13 @@
@@ -120601,7 +120601,7 @@ index 61bebcfb0..4fb674e4c 100644
      gmMainLib_8015CDEC();
  }
  
-@@ -199,6 +206,93 @@ void gmVsMelee_EnterVs(GameModeState* state, VsModeData* vs,
+@@ -199,6 +206,109 @@ void gmVsMelee_EnterVs(GameModeState* state, VsModeData* vs,
          }
      }
  
@@ -120692,10 +120692,26 @@ index 61bebcfb0..4fb674e4c 100644
 +    }
 +#endif
 +
++#ifdef MU_NATIVE
++    /* Optional ordinary stage start-point indices, applied before match creation. */
++    {
++        int points[6];
++        extern int mu_spawn_request(int* points, int count);
++        if (mu_spawn_request(points, Gm_Player_NumMax)) {
++            ssize_t i;
++            for (i = 0; i < Gm_Player_NumMax; i++) {
++                if (start->players[i].slot_type != Gm_PKind_NA) {
++                    start->players[i].spawn_pos = (s8) points[i];
++                }
++            }
++        }
++    }
++#endif
++
      gm_SetupSubColors(start);
      gm_LoadRumbleEnabled(start);
      gm_LoadAnnouncer();
-@@ -210,6 +304,42 @@ void gmVsMelee_ExitVs(GameModeState* state, u8 id0, u8 id1)
+@@ -210,6 +320,42 @@ void gmVsMelee_ExitVs(GameModeState* state, u8 id0, u8 id1)
  {
      MatchExitInfo* exit = gm_GetGameModeStateExitData(state);
      ssize_t i;
@@ -120738,7 +120754,7 @@ index 61bebcfb0..4fb674e4c 100644
  
      for (i = 0; i < GM_MAX_PLAYERS; i++) {
          if (exit->match_end.player_standings[i].pkind == Gm_PKind_Human) {
-@@ -225,6 +355,15 @@ void gmVsMelee_ExitVs(GameModeState* state, u8 id0, u8 id1)
+@@ -225,6 +371,15 @@ void gmVsMelee_ExitVs(GameModeState* state, u8 id0, u8 id1)
                                        gm_80162800(&exit->match_end));
      }
  
@@ -120754,7 +120770,7 @@ index 61bebcfb0..4fb674e4c 100644
      if (!gm_MatchHasMultipleWinners(&exit->match_end)) {
          gm_SetNextGameModeStateId(id0);
      } else {
-@@ -300,21 +439,21 @@ void gmVsMelee_ExitResults(GameModeState* state, VsModeData* vs, u8 state_id)
+@@ -300,21 +455,21 @@ void gmVsMelee_ExitResults(GameModeState* state, VsModeData* vs, u8 state_id)
              unk = gm_80172DD4(gmMainLib_8015ED98()->x0);
              if (unk != ChKind_None) {
                  gm_InitChallengerData(match_end->player_standings[idx].ckind,

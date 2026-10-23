@@ -60,6 +60,24 @@ int mu_stock_rules_request(int* seconds, int* stocks)
     return 1;
 }
 
+/* Stage-defined start positions are ordinary game setup fields. No coordinates,
+ * fighter state or physics are rewritten once the match has started. */
+int mu_spawn_request(int* points, int count)
+{
+    const MuMatchOverride* over;
+    int i;
+    if (mu_host->version < 20 || mu_host->match_override == NULL || count < 1 || count > 6) {
+        return 0;
+    }
+    over = mu_host->match_override();
+    if (over == NULL || !over->has_spawn_points) return 0;
+    for (i = 0; i < 6; i++) {
+        if (over->players[i].kind >= 0 && (over->spawn_points[i] < 0 || over->spawn_points[i] > 3)) return 0;
+    }
+    for (i = 0; i < count; i++) points[i] = over->spawn_points[i];
+    return 1;
+}
+
 /* --rng-seed (M7 lockstep parity): the seed is set at the first in-match setup RNG boundary,
  * immediately before it_8026D018 draws the ambient item-spawn delay. The previous first-frame
  * hook ran after this gameplay-affecting draw, leaving it uncontrolled. Mark the scripted input

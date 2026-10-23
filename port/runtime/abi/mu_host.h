@@ -19,7 +19,7 @@
 extern "C" {
 #endif
 
-#define MU_HOST_API_VERSION 19
+#define MU_HOST_API_VERSION 20
 #define MU_GAME_API_VERSION 6
 #define MU_SLIPPI_RESPONSE_CAPACITY 4096u
 
@@ -73,6 +73,10 @@ typedef struct MuMatchPlayer {
 typedef struct MuMatchOverride {
     int32_t stage;       /* the rules' stage kind */
     MuMatchPlayer players[6];
+    /* Version 20: optional stage-defined initial spawn indices, not coordinates.
+     * Zero flag preserves the ordinary per-slot spawn setup. */
+    int32_t has_spawn_points;
+    int32_t spawn_points[6];
 } MuMatchOverride;
 
 /* Version 9: Slippi replay playback (--replay). The host parses the .slp and answers what Slippi's

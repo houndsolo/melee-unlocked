@@ -27,6 +27,28 @@ construction. Rebuild both host and game library; the entry point requires
 matching API versions. Existing game structures, state POD layout and control
 wire protocol are unchanged.
 
+Host API **20** extends `MuMatchOverride` with an optional initial spawn-point
+flag and six stage-defined indices. Append `spawns A B` to `--match` to select
+two distinct indices in 0..3 for the configured logical players; `ports` and
+`spawns` may appear in either order, once each. The callback table stays unchanged.
+For the example above, `spawns 0 1` places P2/P3 at Yoshi's left/right starting
+platforms. The ordinary game constructor consumes `StartMeleeData.spawn_pos`;
+this does not enable neutral-spawn codes or recover the source game's settings.
+No live coordinates, update logic, timing or math are changed. Omitting this
+option preserves ordinary per-slot starts and the previous recording bytes.
+Rebuild host and game together after the API change.
+
+The first real-footage opening search used all 72 declared two-controller
+programs at replay checkpoint -40. Ordinary slot starts rejected all 72. With
+the source's visibly left/right starting platforms declared as indices 0/1,
+24 pass sparse damage/order cues through frame 18. The selected genuine partial
+recording reproduces from a fresh boot; independent parsing and actual official
+Playback pass. Nine state fields match exactly across -39..18 (116 player-frames),
+and seven native observation fields match their signed recording keys. This
+establishes engine/playback consistency for the tested branch, not video likeness,
+original inputs or complete pre-clock parity. The separate Ready failure below
+remains unresolved.
+
 The cooperative controller and checkpoint gate recognize exactly two live
 fighters, including non-default slots. All four PAD samples still pass through
 ordinary polling. Callers must connect the active ports and disconnect unused
